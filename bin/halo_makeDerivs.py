@@ -5,9 +5,13 @@ import scipy
 from hmf.hmf import MassFunction as mf
 from scipy import constants as const
 from astropy import units as u
-def clusterNum(params):
+def clusterNum(params,verbose=True):
+    # little h
+    h = params['cosmo']['H0']/100.0
+    #h = 1
+    #if verbose: print " little h = ",h
     # Arrange pixels
-    zrange = np.arange(params['zmin'],params['zmax']+params['dz'],params['dz'])
+    zrange = np.arange(params['zmin']+params['dz'],params['zmax']+params['dz'],params['dz'])
 
     N = np.zeros([len(zrange),len(zrange)])
     i = 0
@@ -18,21 +22,22 @@ def clusterNum(params):
         # .cosmo_params: to change parameters, .cosmo: modified object, .cosmo_model: default object (H0 = 67.74....)
         halo.cosmo_params = params['cosmo']
 
-        # Get Mass Selection Function
-        P = (1./2.)*scipy.special.erfc( (np.log(params['Mth'])-np.log(halo.M)) / (np.sqrt(2)*params['sigmalnM']) )
+        # Get Mass Selection Function - unitless
+        P = (1./2.)*scipy.special.erfc( (np.log(10**params['Mth'])-np.log(halo.M)) / (np.sqrt(2)*params['sigmalnM']) )
         P =  np.nan_to_num(P)
 
-        # Calculate number density of clusters in ith pixel
+        # Calculate number density of clusters in ith pixel - h^3/Mpc^3
         ni = 0.
         for k in range(0,len(P)):
             ni += halo.dlog10m*P[k]*halo.dndlog10m[k]
+        ni = ni*h**3 # Convert to 1/Mpc^3
 
-        # Calculate volume of ith pixel
+        # Calculate volume of ith pixel - Mpc^3
         # Formula: V_i=\frac{c}{H(z)}\chi^2\Delta\Omega\Delta z
         c = const.c*10**(-3)*u.km/u.s
         H = halo.cosmo.H(z)
         X = halo.cosmo.comoving_transverse_distance(z)
-        dOm = (np.pi/180.)**2*params['dOm']
+        dOm = (np.pi/180.)**2*params['dOm'] # Convert from sq degree to steradian
         dz = params['dz']
         Vi = (c/H)*(X**2)*dOm*dz
         Vi = Vi/(u.Mpc)**3
@@ -54,7 +59,13 @@ def main(argv):
     stepSizes = {}
     fparams['hmf_model'] = Config.get('general','hmf_model')
     for (key, val) in Config.items('hmf'):
-        fparams[key] = float(val)
+        if ',' in val:
+            param, step = val.split(',')
+            paramList.append(key)
+            fparams[key] = float(param)
+            stepSizes[key] = float(step)
+        else:
+            fparams[key] = float(val)
     # Make a separate list for cosmology to add to massfunction
     for (key, val) in Config.items('cosmo'):
         if ',' in val:
@@ -71,7 +82,8 @@ def main(argv):
     # Save fiducials                                                                                        
     print "Calculating and saving fiducial cosmology..."
     fidN = clusterNum(fparams)
- 
+    print "Number of clusters for zmax=",fparams['zmax'],", dOm=",fparams['dOm'],": ",np.trace(fidN)
+    #sys.exit("stop!")
     np.savetxt("output/"+fparams['hmf_model']+"_fN.csv",fidN,delimiter=",")
 
     # Make derivatives
