@@ -3,12 +3,13 @@ import numpy as np
 import ConfigParser
 import scipy
 from hmf.hmf import MassFunction as mf
-
+from scipy import constants as const
+from astropy import units as u
 def clusterNum(params):
     # Arrange pixels
     zrange = np.arange(params['zmin'],params['zmax']+params['dz'],params['dz'])
 
-    N = np.zeros([len(zrange),len(zrange))
+    N = np.zeros([len(zrange),len(zrange)])
     i = 0
     # Looping over all pixels
     for z in zrange:
@@ -28,15 +29,15 @@ def clusterNum(params):
 
         # Calculate volume of ith pixel
         # Formula: V_i=\frac{c}{H(z)}\chi^2\Delta\Omega\Delta z
-        c = scipy.constants.c
+        c = const.c*10**(-3)*u.km/u.s
         H = halo.cosmo.H(z)
         X = halo.cosmo.comoving_transverse_distance(z)
         dOm = (np.pi/180.)**2*params['dOm']
         dz = params['dz']
         Vi = (c/H)*(X**2)*dOm*dz
-
+        Vi = Vi/(u.Mpc)**3
         # Add element to N matrix
-        N[i,i] = Vi*ni
+        N[i,i] = float(Vi*ni)
         i+=1
 
     return np.nan_to_num(N)
@@ -64,13 +65,14 @@ def main(argv):
         else:
             cosmo[key] = float(val)
     fparams['cosmo'] = cosmo
+    print fparams
     # Add special case for m_nu, need to use astropy.units.u.Quantity()
 
     # Save fiducials                                                                                        
     print "Calculating and saving fiducial cosmology..."
     fidN = clusterNum(fparams)
  
-    np.savetxt("output/fN.csv",fidN,delimiter=",")
+    np.savetxt("output/"+fparams['hmf_model']+"_fN.csv",fidN,delimiter=",")
 
     # Make derivatives
     for paramName in paramList:
@@ -90,7 +92,6 @@ def main(argv):
             
             dN = (pN-mN)/h
             
-            np.savetxt("output/"+paramName+"dN.csv",dN,delimiter=",")
         else:
             print "Calculating forward difference for ", paramName
             pparams = fparams.copy()
@@ -103,8 +104,7 @@ def main(argv):
             mN = clusterNum(mparams)
             
             dN = (pN-mN)/h
-            
-            np.savetxt("output/"+paramName+"dN.csv",dN,delimiter=",")
+        np.savetxt("output/"+fparams['hmf_model']+"_"+paramName+"_dN.csv",dN,delimiter=",")
 
 if (__name__ == "__main__"):
     main(sys.argv[1:])
