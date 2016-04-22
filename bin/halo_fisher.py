@@ -24,19 +24,20 @@ class haloFisher:
         derivRoot = Config.get('general','derivRoot')
 
         fidN = np.loadtxt("output/"+derivRoot+"_fN.csv",delimiter=",")
+        print "Number of clusters: ",np.trace(fidN)
         dN = {}
         for paramName in self.paramList:
             dN[paramName] = np.loadtxt("output/"+derivRoot+"_"+paramName+"_dN.csv",delimiter=",")
         
         # Calculate covariance matrix
         Cov = np.zeros([len(fidN),len(fidN)])
-        for i in range(0,len(fidN)):
-            for j in range(0,len(fidN)):
+        for i in range(len(fidN)):
+            for j in range(len(fidN)):
                 # Add sample variance
                 S = 0.
                 Cov[i,j] = fidN[i,j] + S
         InvCov = np.linalg.inv(Cov)
-
+        
         paramCombs = itertools.combinations_with_replacement(self.paramList,2)
         Fisher = np.zeros((self.numParams,self.numParams))
 
@@ -45,12 +46,12 @@ class haloFisher:
             u = self.paramList.index(param1)
             v = self.paramList.index(param2)
             Fij = 0.
-            for i in range(0,len(fidN)):
-                for j in range(0,len(fidN)):
+            for i in range(len(fidN)):
+                for j in range(len(fidN)):
                     Fij += dN[param1][i,i]*InvCov[i,j]*dN[param2][j,j]
             Fisher[u,v] = Fij
             Fisher[v,u] = Fij
-        
+
         self.totFisher += Fisher
 
         if verbose:
